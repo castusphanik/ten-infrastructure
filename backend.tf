@@ -1,13 +1,20 @@
 terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+
   backend "s3" {
-    bucket         = "ten-terraform-statefile"  # Your actual bucket name
-    key            = "env/dev/terraform.tfstate"  # File path in the bucket
-    region         = "ap-south-1"                  # Your AWS region
+    bucket         = "ten-terraform-statefile"
+    key            = "env/dev/terraform.tfstate"
+    region         = "ap-south-1"
     encrypt        = true
-    # dynamodb_table = "terraform-locks"            # Table created above
+    # dynamodb_table = "terraform-locks"  # Optional but good for locking
   }
 }
 
 provider "aws" {
-  region = "ap-south-1" 
+  region = "ap-south-1"
 }

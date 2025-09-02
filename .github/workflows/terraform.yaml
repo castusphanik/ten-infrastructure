@@ -18,6 +18,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v3
+        with:
+          path: |
+            .terraform
+            .terraform.lock.hcl
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -27,7 +37,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: arn:aws:iam::593002333172:role/BE_Github_Actions
-          aws-region: us-east-1
+          aws-region: ap-south-1
 
       - name: Terraform Init
         run: terraform init
@@ -50,11 +60,12 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      # Requires approval in GitHub Environments settings
+      # You must configure this environment in GitHub Settings → Environments → production
+      # And set required reviewers
 
     steps:
       - name: Manual approval pending...
-        run: echo "Waiting for manual approval via environment protection rules..."
+        run: echo "Waiting for manual approval via GitHub Environment protection rules..."
 
   terraform-apply:
     name: Terraform Apply
@@ -69,6 +80,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v3
+        with:
+          path: |
+            .terraform
+            .terraform.lock.hcl
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -78,7 +99,10 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: arn:aws:iam::593002333172:role/BE_Github_Actions
-          aws-region: us-east-1
+          aws-region: ap-south-1
+
+      - name: Terraform Init
+        run: terraform init
 
       - name: Download tfplan
         uses: actions/download-artifact@v4
