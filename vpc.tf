@@ -1,13 +1,13 @@
 
-resource "aws_vpc" "main" {
-  cidr_block = "10.1.0.0/24"
-  enable_dns_support = true
-  enable_dns_hostnames = true
+# resource "aws_vpc" "main" {
+#   cidr_block = "10.1.0.0/24"
+#   enable_dns_support = true
+#   enable_dns_hostnames = true
 
-  tags = {
-    Name = "main-vpc"
-  }
-}
+#   tags = {
+#     Name = "main-vpc"
+#   }
+# }
 
 # resource "aws_internet_gateway" "igw" {
 #   vpc_id = aws_vpc.main.id
