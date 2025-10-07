@@ -1,3 +1,4 @@
+# 
 name: Terraform Deploy with OIDC, Validation & Manual Approval
 
 on:
@@ -10,15 +11,13 @@ jobs:
     name: Terraform Plan & Apply
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        env: [dev, qa, uat, prod]
-
     permissions:
       id-token: write
       contents: read
 
-    environment: ${{ matrix.env }} # GitHub environment protections will handle manual approvals for UAT/PROD
+    strategy:
+      matrix:
+        env: [dev, qa, uat, prod]
 
     steps:
       - name: Checkout code
@@ -48,35 +47,48 @@ jobs:
           role-to-assume: arn:aws:iam::593002333172:role/BE_Github_Actions
           aws-region: ap-south-1
 
-      - name: Terraform Init
+      - name: Check if tfvars exists
+        id: check_tfvars
         run: |
-          terraform init \
-          -backend-config="key=terraform/${{ matrix.env }}/terraform.tfstate"
+          if [ -f "${{ matrix.env }}.tfvars" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Terraform Init
+        if: steps.check_tfvars.outputs.exists == 'true'
+        run: terraform init -backend-config="key=terraform/${{ matrix.env }}/terraform.tfstate"
 
       - name: Terraform Validate
+        if: steps.check_tfvars.outputs.exists == 'true'
         run: terraform validate
 
       - name: Terraform Plan
-        run: |
-          if [ -f "environments/${{ matrix.env }}.tfvars" ]; then
-            terraform plan -var-file="environments/${{ matrix.env }}.tfvars" -out=tfplan
-          else
-            echo "No tfvars file for ${{ matrix.env }}, skipping plan..."
-          fi
+        if: steps.check_tfvars.outputs.exists == 'true'
+        run: terraform plan -var-file="${{ matrix.env }}.tfvars" -out=tfplan
 
       - name: Upload tfplan artifact
-        if: ${{ matrix.env != 'uat' && matrix.env != 'prod' || success() }}
+        if: steps.check_tfvars.outputs.exists == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ matrix.env }}
           path: tfplan
-        continue-on-error: true
+
+      - name: Manual approval for UAT/PROD
+        if: steps.check_tfvars.outputs.exists == 'true' && (matrix.env == 'uat' || matrix.env == 'prod')
+        uses: hmarr/auto-approve-action@v2
+        with:
+          message: "Manual approval required for ${{ matrix.env }} environment"
+          comment: "Approve to continue Terraform Apply"
 
       - name: Terraform Apply
-        if: ${{ matrix.env != 'uat' && matrix.env != 'prod' || success() }}
-        run: |
-          if [ -f "tfplan" ]; then
-            terraform apply -auto-approve tfplan
-          else
-            echo "No plan file found, skipping apply for ${{ matrix.env }}"
-          fi
+        if: steps.check_tfvars.outputs.exists == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ matrix.env }}
+          path: .
+          
+      - name: Apply tfplan
+        if: steps.check_tfvars.outputs.exists == 'true'
+        run: terraform apply -auto-approve tfplan
