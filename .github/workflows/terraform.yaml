@@ -1,40 +1,28 @@
-name: Terraform Deploy with OIDC and Environment Handling
+name: Terraform Deploy with OIDC, Validation & Manual Approval
 
 on:
   push:
     branches:
       - main
 
-env:
-  TF_VERSION: 1.6.0
-  AWS_ROLE: arn:aws:iam::593002333172:role/BE_Github_Actions
-  AWS_REGION: ap-south-1
-
 jobs:
   terraform:
-    name: Terraform Plan and Apply
+    name: Terraform Plan & Apply
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        env: [dev, qa, uat, prod]  # list all environments
+        env: [dev, qa, uat, prod]
+
+    permissions:
+      id-token: write
+      contents: read
+
+    environment: ${{ matrix.env }} # GitHub environment protections will handle manual approvals for UAT/PROD
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Check if vars file exists
-        id: check-vars
-        run: |
-          if [ -f "${{ matrix.env }}.tfvars" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Skip if vars file not found
-        if: steps.check-vars.outputs.exists == 'false'
-        run: |
-          echo "No TFVars file for ${{ matrix.env }}. Skipping..."
-          exit 0
 
       - name: Cache Terraform providers
         uses: actions/cache@v3
@@ -42,91 +30,53 @@ jobs:
           path: |
             .terraform
             .terraform.lock.hcl
-          key: ${{ runner.os }}-terraform-${{ matrix.env }}-${{ hashFiles('**/*.tf') }}
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf') }}
           restore-keys: |
-            ${{ runner.os }}-terraform-${{ matrix.env }}-
+            ${{ runner.os }}-terraform-
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: ${{ env.TF_VERSION }}
+          terraform_version: 1.6.0
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::593002333172:role/BE_Github_Actions
+          aws-region: ap-south-1
 
       - name: Terraform Init
-        run: terraform init -backend-config="path=terraform.tfstate"
+        run: |
+          terraform init \
+          -backend-config="key=terraform/${{ matrix.env }}/terraform.tfstate"
 
       - name: Terraform Validate
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -var-file="${{ matrix.env }}.tfvars" -out=tfplan
+        run: |
+          if [ -f "environments/${{ matrix.env }}.tfvars" ]; then
+            terraform plan -var-file="environments/${{ matrix.env }}.tfvars" -out=tfplan
+          else
+            echo "No tfvars file for ${{ matrix.env }}, skipping plan..."
+          fi
 
       - name: Upload tfplan artifact
+        if: ${{ matrix.env != 'uat' && matrix.env != 'prod' || success() }}
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ matrix.env }}
           path: tfplan
-
-  manual-approval:
-    name: Wait for Manual Approval
-    needs: terraform-check
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        env: [uat, prod]
-    environment:
-      name: ${{ matrix.env }}
-    steps:
-      - name: Manual approval pending...
-        run: echo "Waiting for manual approval for ${{ matrix.env }}"
-
-
-
-  terraform-apply:
-    name: Terraform Apply
-    runs-on: ubuntu-latest
-    needs: [terraform, manual-approval-uat-prod]
-    strategy:
-      matrix:
-        env: [dev, qa, uat, prod]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Cache Terraform providers
-        uses: actions/cache@v3
-        with:
-          path: |
-            .terraform
-            .terraform.lock.hcl
-          key: ${{ runner.os }}-terraform-${{ matrix.env }}-${{ hashFiles('**/*.tf') }}
-          restore-keys: |
-            ${{ runner.os }}-terraform-${{ matrix.env }}-
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Terraform Init
-        run: terraform init -backend-config="path=terraform.tfstate"
-
-      - name: Download tfplan
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ matrix.env }}
-          path: .
+        continue-on-error: true
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve tfplan
+        if: ${{ matrix.env != 'uat' && matrix.env != 'prod' || success() }}
+        run: |
+          if [ -f "tfplan" ]; then
+            terraform apply -auto-approve tfplan
+          else
+            echo "No plan file found, skipping apply for ${{ matrix.env }}"
+          fi
