@@ -72,16 +72,16 @@ jobs:
           name: tfplan-${{ matrix.env }}
           path: tfplan
 
-manual-approval:
-  name: Wait for Manual Approval
-  needs: terraform-check
-  runs-on: ubuntu-latest
-  if: contains(fromJSON('["uat","prod"]'), matrix.env)
-  environment:
-    name: ${{ matrix.env }}
-  steps:
-    - name: Manual approval pending...
-      run: echo "Waiting for manual approval via GitHub Environment protection rules..."
+  manual-approval:
+    name: Wait for Manual Approval
+    needs: terraform-check
+    runs-on: ubuntu-latest
+    if: contains(fromJSON('["uat","prod"]'), matrix.env)
+    environment:
+      name: ${{ matrix.env }}
+    steps:
+      - name: Manual approval pending...
+        run: echo "Waiting for manual approval via GitHub Environment protection rules..."
 
 
   terraform-apply:
