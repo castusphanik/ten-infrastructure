@@ -76,12 +76,15 @@ jobs:
     name: Wait for Manual Approval
     needs: terraform-check
     runs-on: ubuntu-latest
-    if: contains(fromJSON('["uat","prod"]'), matrix.env)
+    strategy:
+      matrix:
+        env: [uat, prod]
     environment:
       name: ${{ matrix.env }}
     steps:
       - name: Manual approval pending...
-        run: echo "Waiting for manual approval via GitHub Environment protection rules..."
+        run: echo "Waiting for manual approval for ${{ matrix.env }}"
+
 
 
   terraform-apply:
