@@ -7,10 +7,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "ten-terraform-statefile"
-    key            = "env/dev/terraform.tfstate"
-    region         = "ap-south-1"
-    encrypt        = true
+    bucket  = "ten-terraform-statefile"
+    key     = "terraform/${var.env}/terraform.tfstate"
+    region  = "ap-south-1"
+    encrypt = true
     # dynamodb_table = "terraform-locks"  # Optional but good for locking
   }
 }
