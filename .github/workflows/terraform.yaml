@@ -58,11 +58,15 @@ jobs:
       - name: Terraform Init
         if: steps.check_tfvars.outputs.exists == 'true'
         run: |
+      - name: Terraform Init
+        if: steps.check_tfvars.outputs.exists == 'true'
+        run: |
           terraform init \
             -backend-config="bucket=ten-terraform-statefile" \
             -backend-config="key=terraform/${{ matrix.env }}/terraform.tfstate" \
             -backend-config="region=ap-south-1" \
-            -backend-config="encrypt=true"
+            -backend-config="encrypt=true" \
+            -reconfigure
 
       - name: Terraform Validate
         if: steps.check_tfvars.outputs.exists == 'true'
