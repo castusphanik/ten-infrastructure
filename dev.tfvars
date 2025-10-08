@@ -176,6 +176,6 @@ alternative_domain_names = ["testcp.mindwavesolutions.com"]
 
 
 ################################Route 53 ############################
-web_zone_id     = "Z056042729UX8ZNNN1SOS"
+zone_id     = "Z056042729UX8ZNNN1SOS"
 web_record_name = "testcp.mindwavesolutions.com"
 app_record_name = "testcpapi.mindwavesolutions.com"
