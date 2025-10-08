@@ -109,16 +109,35 @@ on:
       - main
 
 jobs:
-  detect-envs:
-    name: Detect Environments
+  terraform-check:
+    name: Terraform Format & Validate
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+  detect-envs:
+    name: Detect Available Environments
+    runs-on: ubuntu-latest
+    needs: terraform-check
     outputs:
       envs: ${{ steps.set-envs.outputs.envs }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Detect available .tfvars files
+      - name: Detect .tfvars files
         id: set-envs
         run: |
           ENVS=$(ls *.tfvars 2>/dev/null | sed 's/\.tfvars//g' | jq -R -s -c 'split("\n")[:-1]')
@@ -132,7 +151,6 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -164,7 +182,6 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -189,25 +206,35 @@ jobs:
           name: tfplan-${{ matrix.env }}
           path: tfplan
 
-  manual-approval:
-    name: Wait for Manual Approval
+  manual-approval-uat:
+    name: Manual Approval for UAT
     runs-on: ubuntu-latest
     needs: terraform-plan
-    if: contains(fromJSON('["uat","prod"]'), matrix.env)
+    if: contains(fromJSON(needs.detect-envs.outputs.envs), 'uat')
     environment:
-      name: ${{ matrix.env }}
+      name: uat
     steps:
       - name: Await manual approval
-        run: echo "Waiting for manual approval via GitHub Environment protection rules..."
+        run: echo "Waiting for manual approval for UAT..."
+
+  manual-approval-prod:
+    name: Manual Approval for PROD
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: contains(fromJSON(needs.detect-envs.outputs.envs), 'prod')
+    environment:
+      name: prod
+    steps:
+      - name: Await manual approval
+        run: echo "Waiting for manual approval for PROD..."
 
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    needs: [terraform-plan, manual-approval]
+    needs: [terraform-plan, manual-approval-uat, manual-approval-prod]
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -223,7 +250,7 @@ jobs:
           role-to-assume: arn:aws:iam::593002333172:role/BE_Github_Actions
           aws-region: ap-south-1
 
-      - name: Download tfplan
+      - name: Download tfplan artifact
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ matrix.env }}
