@@ -90,10 +90,11 @@ variable "rds_name" {}
 # variable "subnet_ids" {}
 
 ############Route 53####################
-variable "web_zone_id" { type = string }
+variable "zone_id" { type = string }
 variable "web_record_name" { type = string }
 # variable "target_dns_name" { type = string }
 # variable "target_zone_id" { type = string }
+variable "app_record_name" { type = string }
 
 ###############Route Tables##############
 

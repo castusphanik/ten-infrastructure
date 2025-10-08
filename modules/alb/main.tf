@@ -6,6 +6,7 @@ resource "aws_lb" "this" {
   security_groups            = var.security_group_ids
   enable_deletion_protection = false
   tags                       = var.tags
+  depends_on = [ aws_lb_target_group.tg ]
 }
 
 resource "aws_lb_target_group" "tg" {
@@ -38,3 +39,7 @@ output "dns_name" {
 
 }
 output "tg_arn" { value = aws_lb_target_group.tg.arn }
+output "alb_hosted_zone" {
+  value = aws_lb.this.zone_id
+  
+}
