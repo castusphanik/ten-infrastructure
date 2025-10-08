@@ -172,24 +172,31 @@ jobs:
           name: tfplan-${{ matrix.env }}
           path: tfplan
 
-  manual-approval:
-    name: Manual Approval for UAT/PROD
+  # Separate manual approval job for UAT and PROD
+  manual-approval-uat:
+    name: Manual Approval (UAT)
     runs-on: ubuntu-latest
     needs: terraform-plan
-    strategy:
-      matrix:
-        env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: contains(fromJSON('["uat","prod"]'), matrix.env)
+    if: contains(needs.detect-envs.outputs.envs, 'uat')
     environment:
-      name: ${{ matrix.env }}   # Requires environment protection setup in repo settings
+      name: uat
     steps:
-      - name: Await manual approval
-        run: echo "Waiting for manual approval through GitHub Environment gate for ${{ matrix.env }}..."
+      - run: echo "⏳ Waiting for manual approval for UAT..."
+
+  manual-approval-prod:
+    name: Manual Approval (PROD)
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: contains(needs.detect-envs.outputs.envs, 'prod')
+    environment:
+      name: prod
+    steps:
+      - run: echo "⏳ Waiting for manual approval for PROD..."
 
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    needs: [terraform-plan, manual-approval]
+    needs: [terraform-plan, manual-approval-uat, manual-approval-prod]
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
@@ -214,5 +221,7 @@ jobs:
           name: tfplan-${{ matrix.env }}
           path: .
 
+      # Auto-apply for dev/qa, waits for approval for uat/prod
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
+
