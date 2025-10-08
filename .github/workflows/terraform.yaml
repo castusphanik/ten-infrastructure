@@ -101,38 +101,41 @@
 #         if: steps.check_tfvars.outputs.exists == 'true'
 #         run: terraform apply -auto-approve tfplan
 
-name: Terraform CI/CD with Environment Detection & Manual Approval
+name: Terraform Deploy with OIDC, Validation & Manual Approval
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   detect-envs:
     name: Detect Environments
     runs-on: ubuntu-latest
     outputs:
-      envs: ${{ steps.set-envs.outputs.envs }}
+      envs: ${{ steps.detect.outputs.envs }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Detect available .tfvars files
-        id: set-envs
+      - name: Detect available .tfvars
+        id: detect
         run: |
           ENVS=$(ls *.tfvars 2>/dev/null | sed 's/\.tfvars//g' | jq -R -s -c 'split("\n")[:-1]')
           echo "Detected envs: $ENVS"
           echo "envs=$ENVS" >> $GITHUB_OUTPUT
 
-  terraform-init:
-    name: Terraform Init
+  terraform-plan:
+    name: Terraform Plan
     runs-on: ubuntu-latest
     needs: detect-envs
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -157,28 +160,8 @@ jobs:
             -backend-config="encrypt=true" \
             -reconfigure
 
-  terraform-plan:
-    name: Terraform Plan
-    runs-on: ubuntu-latest
-    needs: terraform-init
-    strategy:
-      matrix:
-        env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-
-      - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: arn:aws:iam::593002333172:role/BE_Github_Actions
-          aws-region: ap-south-1
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Terraform Plan
         run: terraform plan -var-file="${{ matrix.env }}.tfvars" -out=tfplan
@@ -190,15 +173,18 @@ jobs:
           path: tfplan
 
   manual-approval:
-    name: Wait for Manual Approval
+    name: Manual Approval for UAT/PROD
     runs-on: ubuntu-latest
     needs: terraform-plan
+    strategy:
+      matrix:
+        env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
     if: contains(fromJSON('["uat","prod"]'), matrix.env)
     environment:
-      name: ${{ matrix.env }}
+      name: ${{ matrix.env }}   # Requires environment protection setup in repo settings
     steps:
       - name: Await manual approval
-        run: echo "Waiting for manual approval via GitHub Environment protection rules..."
+        run: echo "Waiting for manual approval through GitHub Environment gate for ${{ matrix.env }}..."
 
   terraform-apply:
     name: Terraform Apply
@@ -207,7 +193,6 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
