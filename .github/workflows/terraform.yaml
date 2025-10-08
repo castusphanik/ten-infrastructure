@@ -101,7 +101,7 @@
 #         if: steps.check_tfvars.outputs.exists == 'true'
 #         run: terraform apply -auto-approve tfplan
 
-name: Terraform CI/CD with Environment Detection, Validation & Manual Approval
+name: Terraform CI/CD with Environment Detection & Manual Approval
 
 on:
   push:
@@ -151,7 +151,6 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -183,7 +182,6 @@ jobs:
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -208,27 +206,35 @@ jobs:
           name: tfplan-${{ matrix.env }}
           path: tfplan
 
-  manual-approval:
-    name: Manual Approval for UAT/PROD
+  manual-approval-uat:
+    name: Manual Approval for UAT
     runs-on: ubuntu-latest
     needs: terraform-plan
-    strategy:
-      matrix:
-        env: ['uat','prod']
+    if: contains(fromJSON(needs.detect-envs.outputs.envs), 'uat')
+    environment:
+      name: uat
     steps:
       - name: Await manual approval
-        environment:
-          name: ${{ matrix.env }}
-        run: echo "Waiting for manual approval via GitHub Environment protection rules..."
+        run: echo "Waiting for manual approval for UAT..."
+
+  manual-approval-prod:
+    name: Manual Approval for PROD
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: contains(fromJSON(needs.detect-envs.outputs.envs), 'prod')
+    environment:
+      name: prod
+    steps:
+      - name: Await manual approval
+        run: echo "Waiting for manual approval for PROD..."
 
   terraform-apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    needs: [terraform-plan, manual-approval]
+    needs: [terraform-plan, manual-approval-uat, manual-approval-prod]
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: ${{ matrix.env != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
