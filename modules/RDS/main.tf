@@ -39,6 +39,9 @@ resource "aws_db_instance" "postgres" {
   username               = local.db_credentials.username # master username
   password               = local.db_credentials.password # use Terraform variable / secret
   port                   = 5432
+  backup_retention_period = 7
+  iam_database_authentication_enabled = true
+  storage_encrypted = true
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet.id
   vpc_security_group_ids = var.security_group_ids
   publicly_accessible    = false
