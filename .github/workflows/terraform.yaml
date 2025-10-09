@@ -172,27 +172,14 @@ jobs:
           name: tfplan-${{ matrix.env }}
           path: tfplan
 
-  # Conditional manual approval jobs for UAT and PROD
-  manual-approval:
-    name: Manual Approval (UAT/PROD)
+  terraform-apply:
+    name: Terraform Apply
     runs-on: ubuntu-latest
     needs: terraform-plan
     strategy:
       matrix:
         env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
-    if: matrix.env == 'uat' || matrix.env == 'prod'
-    environment:
-      name: ${{ matrix.env }}
-    steps:
-      - run: echo "⏳ Waiting for manual approval for ${{ matrix.env }}..."
-
-  terraform-apply:
-    name: Terraform Apply
-    runs-on: ubuntu-latest
-    needs: [terraform-plan, manual-approval]
-    strategy:
-      matrix:
-        env: ${{ fromJSON(needs.detect-envs.outputs.envs) }}
+    environment: ${{ matrix.env }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
